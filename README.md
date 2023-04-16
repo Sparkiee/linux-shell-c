@@ -1,6 +1,5 @@
 # Basic Linux Shell in C
 Authored by Maxim Shteingard
-209171156
 
 == Description == 
 	The program is a simulation of a Linux shell with command execution and support for variables. The shell allows users to enter and execute commands, separated by semicolons, with arguments. Additionally, the shell supports defining and using variables with the '$' prefix.
