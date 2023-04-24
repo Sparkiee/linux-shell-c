@@ -19,6 +19,7 @@ typedef struct {
     char *value;
 } KeyVariable;
 
+// a function which frees memory allocated
 void free_key_variables(KeyVariable *vars, int count) {
     for (int i = 0; i < count; i++) {
         free(vars[i].key);
@@ -47,57 +48,40 @@ char* replace_value(KeyVariable *table, const char *key, int count)
     return NULL;
 }
 
-
+// replaces all appearances of a $key with it's value
 char* replace_all_variables(const char *str, KeyVariable *vars, int variables_count) {
     char buffer[MAX_CMD * 2] = "";
     const char *start = str;
     const char *end = NULL;
-    int in_quotes = 0;
 
-    while (*start != '\0') {
-        if (*start == '"') {
-            in_quotes = !in_quotes;
+    while ((end = strchr(start, '$')) != NULL) {
+        strncat(buffer, start, end - start);
+
+        char key[MAX_CMD];
+        int key_len = 0;
+        const char *key_start = end + 1;
+        while (isalnum(*key_start) || *key_start == '_') {
+            key[key_len++] = *key_start++;
         }
+        key[key_len] = '\0';
 
-        if (*start == '$' && !in_quotes) {
-            strncat(buffer, str, start - str);
-
-            char key[MAX_CMD];
-            int key_len = 0;
-            const char *key_start = start + 1;
-            while (isalnum(*key_start) || *key_start == '_') {
-                key[key_len++] = *key_start++;
-            }
-            key[key_len] = '\0';
-
-            char *value = replace_value(vars, key, variables_count);
-            if (value) {
-                if (value[0] != '"' || value[strlen(value) - 1] != '"') {
-                    char *quoted_value = (char *)malloc(strlen(value) + 3);
-                    if (quoted_value == NULL) {
-                        perror("ERR\n");
-                        exit(1);
-                    }
-                    sprintf(quoted_value, "\"%s\"", value);
-                    strcat(buffer, quoted_value);
-                    free(quoted_value);
-                } else {
-                    strcat(buffer, value);
-                }
-                free(value);
-            }
-
-            str = key_start;
-            start = str;
+        char *value = replace_value(vars, key, variables_count);
+        if (value) {
+            strcat(buffer, value);
+            free(value);
         } else {
-            start++;
+            // If the key is not found, keep the original text (including the $ symbol) in the output string
+            strncat(buffer, end, (key_start - end));
         }
+
+        start = key_start;
     }
 
-    strcat(buffer, str);
+    strcat(buffer, start);
     return strdup(buffer);
 }
 
+// checks whether or not, the string (or token in this case) is between quotation marks
 bool is_enclosed_in_quotes(const char *str) {
     const char *first_quote = strchr(str, '"');
     const char *last_quote = strrchr(str, '"');
@@ -122,16 +106,6 @@ void remove_spaces(char *str) {
     *dst = '\0';
 }
 
-// prints the linux prompt format
-void promptPrint(int cmds, int args)
-{
-    char cwd[256];
-    getcwd(cwd, sizeof(cwd));
-    if (cwd == NULL)
-        printf("error getting PWD!!!\n");
-    printf("#cmd:%d|#args:%d@%s> ",cmds, args, cwd);
-}
-
 int main()
 {
     int total_valid_cmds = 0;
@@ -140,7 +114,14 @@ int main()
     int variables_capacity = 10;
     int variables_count = 0;
 
+    char cwd[256];
+    if (getcwd(cwd, sizeof(cwd)) == NULL) {
+        printf("Error getting path");
+        exit(1);
+    }
+
     KeyVariable *vars = malloc(variables_capacity * sizeof (KeyVariable));
+
     while(1) {
 
         // adding extra 2 chars for '\n' and '\0'
@@ -150,9 +131,8 @@ int main()
 
         //receiving input from user
         while (enter_count < MAX_ENTER_PRESSES) {
-
-            promptPrint(total_valid_cmds, total_valid_args);
-            fgets(input, MAX_CMD + 2, stdin);
+            printf("#cmd:%d|#args:%d@%s> ",total_valid_cmds, total_valid_args, cwd);
+            fgets(input, MAX_CMD, stdin);
             if (input[0] == '\n') {
                 enter_count++;
             }
@@ -170,7 +150,9 @@ int main()
 
         // if we've exceeded the MAX_CMD char limit;
         if (strchr(input, '\n') == NULL && !feof(stdin)) {
-            printf("You've exceeded the maximum limit of %d", MAX_CMD);
+            printf("You've exceeded the maximum limit of %d\n", MAX_CMD);
+            // Discard the remaining characters in the input buffer
+            scanf("%*[^\n]%*c");
             continue;
         }
 
@@ -193,7 +175,7 @@ int main()
             }
             char *inner_delim = " ";
             char *inner_token, *inner_saveptr;
-
+    
             //before we split the command into arguments, we will check if we're trying to save a var
             char key[MAX_CMD], value[MAX_CMD];
             // we are trying to split the command into X = Y, if it succeeded, we will enter the if block
@@ -239,7 +221,7 @@ int main()
                         *loc = '\0';
                     }
                     // if we found a beginning of a quote, we need to start looping for the end of it,
-                    while (!end_quote_found) {
+                    if (!end_quote_found) {
                         inner_token = strtok_r(NULL, "\"", &inner_saveptr);
                         if (inner_token == NULL) {
                             end_quote_found = true;
@@ -261,11 +243,6 @@ int main()
                 arguments[count++] = inner_token;
                 inner_token = strtok_r(NULL, inner_delim, &inner_saveptr);
             }
-
-            /*printf("\n");
-            for (int i = 0; i < count; ++i) {
-                printf("%s\n", arguments[i]);
-            }*/
 
             bool command_err = false;
             if(count == 11)
@@ -301,6 +278,9 @@ int main()
                     if(execvp(arguments[0], arguments) == -1) // checking if execution failed of cmd
                     {
                         printf("ERR\n");
+                        total_valid_cmds -= 1;
+                        total_valid_args -= count;
+
                     }
                 }
                 else // parent process
