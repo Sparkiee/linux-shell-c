@@ -1,3 +1,0 @@
-/Users/maxwell/CLionProjects/OS-Ex1/cmake-build-debug/CMakeFiles/OS_Ex1.dir
-/Users/maxwell/CLionProjects/OS-Ex1/cmake-build-debug/CMakeFiles/edit_cache.dir
-/Users/maxwell/CLionProjects/OS-Ex1/cmake-build-debug/CMakeFiles/rebuild_cache.dir
