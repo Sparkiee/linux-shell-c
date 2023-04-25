@@ -284,10 +284,16 @@ int main()
                     if(command_err)
                     {
                         inner_token = NULL;
-                        outer_token = strtok_r(NULL, outer_delim, &outer_saveptr);
+                        continue;
                     }
                     else
                     {
+                        //preping the pipe baseline
+                        char *pipe_delim = "|";
+                        char *pipe_token, *pipe_saveptr;
+                        char *pipe_cmds[MAX_ARGUMENTS + 1];
+                        int pipe_count = 0;
+
                         total_valid_cmds += 1;
                         total_valid_args += count;
 
@@ -320,10 +326,8 @@ int main()
                                 exit(1);
                             }
                         }
-                        outer_token = strtok_r(NULL, outer_delim, &outer_saveptr);
                     }
                 }
-
                 command_start = input_ptr + 1;
             }
             input_ptr++;
