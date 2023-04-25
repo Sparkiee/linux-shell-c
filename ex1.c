@@ -69,6 +69,10 @@ char* replace_all_variables(const char *str, KeyVariable *vars, int variables_co
         if (value) {
             strcat(buffer, value);
             free(value);
+            // Check if a quotation mark follows the variable
+            if (*key_start == '"') {
+                key_start++; // Skip the quotation mark
+            }
         } else {
             // If the key is not found, keep the original text (including the $ symbol) in the output string
             strncat(buffer, end, (key_start - end));
@@ -78,8 +82,16 @@ char* replace_all_variables(const char *str, KeyVariable *vars, int variables_co
     }
 
     strcat(buffer, start);
+
+    // Remove any quotation marks following the variables
+    char *quote = NULL;
+    while ((quote = strchr(buffer, '"')) != NULL) {
+        memmove(quote, quote + 1, strlen(quote));
+    }
+
     return strdup(buffer);
 }
+
 
 // checks whether or not, the string (or token in this case) is between quotation marks
 bool is_enclosed_in_quotes(const char *str) {
