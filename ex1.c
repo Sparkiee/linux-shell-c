@@ -162,142 +162,160 @@ int main()
         char *outer_delim = ";";
         char *outer_token, *outer_saveptr;
 
-        outer_token = strtok_r(input, outer_delim, &outer_saveptr);
-        // outer loop is splitting them by commands
-        while (outer_token != NULL) {
-            char *replaced_token = replace_all_variables(outer_token, vars, variables_count);
-            outer_token = replaced_token;
+        int in_quotes = 0;
+        char *command_start = input;
+        char *input_ptr = input;
 
-            int count = 0;
-            // resetting the array of arguments in case of junk
-            for (int i = 0; i < MAX_ARGUMENTS; ++i) {
-                arguments[i] = NULL;
+        while (*input_ptr != '\0') {
+            if (*input_ptr == '"') {
+                in_quotes = !in_quotes;
             }
-            char *inner_delim = " ";
-            char *inner_token, *inner_saveptr;
-    
-            //before we split the command into arguments, we will check if we're trying to save a var
-            char key[MAX_CMD], value[MAX_CMD];
-            // we are trying to split the command into X = Y, if it succeeded, we will enter the if block
-            if (!is_enclosed_in_quotes(outer_token) && sscanf(outer_token, "%[^=]=%[^\n]", key, value) == 2) {
-                remove_spaces(key);
-                if(variables_count >= variables_capacity)
-                {
-                    variables_capacity *= 2;
-                    vars = realloc(vars, variables_capacity * sizeof(KeyVariable));
-                }
-                int index = find_key(vars, key, variables_count);
-                if(index == -1)
-                {
-                    vars[variables_count].key = strdup(key);
-                    vars[variables_count].value = strdup(value);
-                    variables_count++;
+
+            if ((*input_ptr == ';' && !in_quotes) || *(input_ptr + 1) == '\0') {
+                if (*(input_ptr + 1) == '\0') {
+                    input_ptr++;
                 } else {
-                    free(vars[index].value);
-                    vars[index].value = strdup(value);
+                    *input_ptr = '\0';
                 }
 
-                // we found a variable, so we are done with current command, skipping to the next
-                // and skipping current itteration
-                inner_token = NULL;
-                free(replaced_token);
-                outer_token = strtok_r(NULL, outer_delim, &outer_saveptr);
-                continue;
-            }
+                char *replaced_token = replace_all_variables(command_start, vars, variables_count);
+                outer_token = replaced_token;
+                int count = 0;
 
-            inner_token = strtok_r(outer_token, inner_delim, &inner_saveptr);
-            // inner loop is splitting them by arguments
-
-            while (inner_token != NULL) {
-                // we are checking for a beginning of a quote
-                if(inner_token[0] == '"') {
-                    bool end_quote_found = false;
-                    size_t len = strlen(inner_token);
-                    char* quoted_token = malloc(len + 1);
-                    strcpy(quoted_token, inner_token + 1);
-                    char *loc = strchr(quoted_token, '"');
-                    if(loc != NULL) {
-                        end_quote_found = true;
-                        *loc = '\0';
-                    }
-                    // if we found a beginning of a quote, we need to start looping for the end of it,
-                    if (!end_quote_found) {
-                        inner_token = strtok_r(NULL, "\"", &inner_saveptr);
-                        if (inner_token == NULL) {
-                            end_quote_found = true;
-                            continue;
-                        }
-                        len = strlen(inner_token);
-                        if(inner_token[len - 1] == '"') {
-                            end_quote_found = true;
-                            inner_token[len - 1] = '\0'; // Remove the closing quote
-                        }
-                        quoted_token = realloc(quoted_token, strlen(quoted_token) + len + 2);
-                        strcat(quoted_token, " ");
-                        strcat(quoted_token, inner_token);
-                    }
-                    inner_token = quoted_token;
+                // resetting the array of arguments in case of junk
+                for (int i = 0; i < MAX_ARGUMENTS; ++i) {
+                    arguments[i] = NULL;
                 }
 
-                // adding the argument into the arguments
-                arguments[count++] = inner_token;
-                inner_token = strtok_r(NULL, inner_delim, &inner_saveptr);
-            }
+                char *inner_delim = " ";
+                char *inner_token, *inner_saveptr;
 
-            bool command_err = false;
-            if(count == 11)
-            {
-                printf("You've exceeded the number of allowed arguments\n");
-                command_err = true;
-            }
-            if(strcmp(arguments[0], "cd") == 0)
-            {
-                printf("cd not supported\n");
-                command_err = true;
-            }
-
-            if(command_err)
-            {
-                inner_token = NULL;
-                outer_token = strtok_r(NULL, outer_delim, &outer_saveptr);
-            }
-            else
-            {
-                total_valid_cmds += 1;
-                total_valid_args += count;
-
-                pid_t pid = fork();
-                if (pid < 0) // fork failed
-                {
-                    fprintf(stderr, "ERR\n");
-                    exit(1);
-                }
-                else if(pid == 0) // child process
-                {
-
-                    if(execvp(arguments[0], arguments) == -1) // checking if execution failed of cmd
+                //before we split the command into arguments, we will check if we're trying to save a var
+                char key[MAX_CMD], value[MAX_CMD];
+                bool added_var = false;
+                // we are trying to split the command into X = Y, if it succeeded, we will enter the if block
+                if (!is_enclosed_in_quotes(outer_token) && sscanf(outer_token, "%[^=]=%[^\n]", key, value) == 2) {
+                    added_var = true;
+                    remove_spaces(key);
+                    if(variables_count >= variables_capacity)
                     {
-                        printf("ERR\n");
-                        total_valid_cmds -= 1;
-                        total_valid_args -= count;
-
+                        variables_capacity *= 2;
+                        vars = realloc(vars, variables_capacity * sizeof(KeyVariable));
                     }
+                    int index = find_key(vars, key, variables_count);
+                    if(index == -1)
+                    {
+                        vars[variables_count].key = strdup(key);
+                        vars[variables_count].value = strdup(value);
+                        variables_count++;
+                    } else {
+                        free(vars[index].value);
+                        vars[index].value = strdup(value);
+                    }
+
+                    // we found a variable, so we are done with current command, skipping to the next
+                    // and skipping current itteration
+                    inner_token = NULL;
+                    free(replaced_token);
                 }
-                else // parent process
+                if(!added_var)
                 {
-                    int status;
-                    waitpid(pid, &status, 0);
-                    if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
-                        //printf("Child process exited with an error, terminating the parent process...\n");
-                        // child process has quit with an error, therefore exitting the programl
-                        free_key_variables(vars, variables_count);
-                        free(vars);
-                        exit(1);
+                    inner_token = strtok_r(outer_token, inner_delim, &inner_saveptr);
+                    while (inner_token != NULL) {
+                        // we are checking for a beginning of a quote
+                        if(inner_token[0] == '"') {
+                            bool end_quote_found = false;
+                            size_t len = strlen(inner_token);
+                            char* quoted_token = malloc(len + 1);
+                            strcpy(quoted_token, inner_token + 1);
+                            char *loc = strchr(quoted_token, '"');
+                            if(loc != NULL) {
+                                end_quote_found = true;
+                                *loc = '\0';
+                            }
+                            // if we found a beginning of a quote, we need to start looping for the end of it,
+                            if (!end_quote_found) {
+                                inner_token = strtok_r(NULL, "\"", &inner_saveptr);
+                                if (inner_token == NULL) {
+                                    end_quote_found = true;
+                                    continue;
+                                }
+                                len = strlen(inner_token);
+                                if(inner_token[len - 1] == '"') {
+                                    end_quote_found = true;
+                                    inner_token[len - 1] = '\0'; // Remove the closing quote
+                                }
+                                quoted_token = realloc(quoted_token, strlen(quoted_token) + len + 2);
+                                strcat(quoted_token, " ");
+                                strcat(quoted_token, inner_token);
+                            }
+                            inner_token = quoted_token;
+                        }
+
+                        // adding the argument into the arguments
+                        arguments[count++] = inner_token;
+                        inner_token = strtok_r(NULL, inner_delim, &inner_saveptr);
+                    }
+
+                    bool command_err = false;
+                    if(count == 11)
+                    {
+                        printf("You've exceeded the number of allowed arguments\n");
+                        command_err = true;
+                    }
+                    if(strcmp(arguments[0], "cd") == 0)
+                    {
+                        printf("cd not supported\n");
+                        command_err = true;
+                    }
+
+                    if(command_err)
+                    {
+                        inner_token = NULL;
+                        outer_token = strtok_r(NULL, outer_delim, &outer_saveptr);
+                    }
+                    else
+                    {
+                        total_valid_cmds += 1;
+                        total_valid_args += count;
+
+                        pid_t pid = fork();
+                        if (pid < 0) // fork failed
+                        {
+                            fprintf(stderr, "ERR\n");
+                            exit(1);
+                        }
+                        else if(pid == 0) // child process
+                        {
+
+                            if(execvp(arguments[0], arguments) == -1) // checking if execution failed of cmd
+                            {
+                                printf("ERR\n");
+                                total_valid_cmds -= 1;
+                                total_valid_args -= count;
+
+                            }
+                        }
+                        else // parent process
+                        {
+                            int status;
+                            waitpid(pid, &status, 0);
+                            if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
+                                //printf("Child process exited with an error, terminating the parent process...\n");
+                                // child process has quit with an error, therefore exitting the programl
+                                free_key_variables(vars, variables_count);
+                                free(vars);
+                                exit(1);
+                            }
+                        }
+                        outer_token = strtok_r(NULL, outer_delim, &outer_saveptr);
                     }
                 }
-                outer_token = strtok_r(NULL, outer_delim, &outer_saveptr);
-            }
 
+                command_start = input_ptr + 1;
+            }
+            input_ptr++;
         }
+
     }
 }
